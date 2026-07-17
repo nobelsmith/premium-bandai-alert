@@ -5,6 +5,8 @@ Monitors Premium Bandai USA (One Piece + BANDAI CARD SHOP) for **new products** 
 **Primary runtime:** Vultr (or any Linux VPS) via a systemd timer every **2 minutes**.  
 GitHub Actions remains available for optional manual runs only (cron disabled â€” unreliable).
 
+Uses [uv](https://docs.astral.sh/uv/) for Python env + dependency management.
+
 ## How it works
 
 1. Polls `https://p-bandai.com/api/search` (HTML fallback) with shop `05-0004` and series `03-002`.
@@ -19,8 +21,9 @@ GitHub Actions remains available for optional manual runs only (cron disabled â€
 On the server (Ubuntu/Debian):
 
 ```bash
-# as a user with sudo
-sudo apt update && sudo apt install -y git python3 python3-venv rsync
+sudo apt update && sudo apt install -y git curl rsync
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source "$HOME/.local/bin/env"
 
 git clone git@github.com:nobelsmith/premium-bandai-alert.git
 cd premium-bandai-alert
@@ -31,7 +34,7 @@ chmod +x deploy/install-systemd.sh
 sudo bash deploy/install-systemd.sh
 ```
 
-That installs to `/opt/premium-bandai-alert`, creates a venv, and enables `pbandai-monitor.timer` (every 2 minutes).
+That installs to `/opt/premium-bandai-alert`, runs `uv sync`, and enables `pbandai-monitor.timer` (every 2 minutes).
 
 Useful commands:
 
@@ -47,13 +50,12 @@ To change the interval, edit `OnUnitActiveSec` in [`deploy/pbandai-monitor.timer
 ## Local setup
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+# install uv if needed: https://docs.astral.sh/uv/getting-started/installation/
+uv sync
 cp .env.example .env
 # Edit .env and set DISCORD_WEBHOOK_URL
 set -a && source .env && set +a
-python monitor.py
+uv run python monitor.py
 ```
 
 `state.json` is written next to the script (gitignored). Delete it to re-seed.

@@ -5,7 +5,6 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALL_DIR="${INSTALL_DIR:-/opt/premium-bandai-alert}"
-SERVICE_USER="${SERVICE_USER:-root}"
 
 if [[ "$(id -u)" -ne 0 ]]; then
   echo "Re-run as root (sudo)." >&2
@@ -22,7 +21,20 @@ if ! grep -q '^DISCORD_WEBHOOK_URL=.\+' "$REPO_ROOT/.env"; then
   exit 1
 fi
 
-echo "Installing to $INSTALL_DIR"
+if ! command -v uv >/dev/null 2>&1; then
+  echo "Installing uv..."
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  # shellcheck disable=SC1091
+  source "$HOME/.local/bin/env" 2>/dev/null || true
+  export PATH="$HOME/.local/bin:/root/.local/bin:$PATH"
+fi
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "uv not found on PATH after install" >&2
+  exit 1
+fi
+
+echo "Installing to $INSTALL_DIR (uv $(uv --version))"
 mkdir -p "$INSTALL_DIR"
 rsync -a --delete \
   --exclude '.git' \
@@ -39,9 +51,8 @@ fi
 
 chmod 600 "$INSTALL_DIR/.env"
 
-python3 -m venv "$INSTALL_DIR/.venv"
-"$INSTALL_DIR/.venv/bin/pip" install --upgrade pip
-"$INSTALL_DIR/.venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt"
+cd "$INSTALL_DIR"
+uv sync --frozen
 
 install -m 644 "$INSTALL_DIR/deploy/pbandai-monitor.service" /etc/systemd/system/pbandai-monitor.service
 install -m 644 "$INSTALL_DIR/deploy/pbandai-monitor.timer" /etc/systemd/system/pbandai-monitor.timer
