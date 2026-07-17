@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -14,16 +15,20 @@ from typing import Any
 import httpx
 
 API_URL = "https://p-bandai.com/api/search"
+SERIES_PAGE_URL = "https://p-bandai.com/{area}/series/onepiece-series"
 ITEM_URL = "https://p-bandai.com/us/item/{code}"
 IMAGE_BASE = "https://p-bandai.com/"
 UNAVAILABLE_FLAGS = frozenset({"OUT_OF_STOCK", "PRE_ORDER_CLOSED"})
 MAX_EMBEDS_PER_MESSAGE = 10
 USER_AGENT = (
-    "Mozilla/5.0 (compatible; PremiumBandaiAlert/1.0; +https://github.com/)"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
 
 COLOR_NEW = 0x3498DB  # blue
 COLOR_AVAILABLE = 0x2ECC71  # green
+
+PRELOAD_RE = re.compile(r"PRELOAD_DATA\s*=\s*")
 
 
 @dataclass(frozen=True)
@@ -111,19 +116,75 @@ def parse_product(raw: dict[str, Any]) -> Product | None:
     )
 
 
-def fetch_all_products(client: httpx.Client) -> list[Product]:
-    shop = env("BANDAI_SHOP", "05-0004")
-    series = env("BANDAI_SERIES", "03-002")
-    area = env("BANDAI_AREA", "US")
-    limit = int(env("BANDAI_PAGE_LIMIT", "100") or "100")
+def extract_json_object(text: str, start: int) -> dict[str, Any]:
+    """Parse a JSON object starting at text[start] (must be '{')."""
+    if start >= len(text) or text[start] != "{":
+        raise ValueError("Expected JSON object")
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return json.loads(text[start : i + 1])
+    raise ValueError("Unbalanced JSON object")
 
+
+def parse_preload_products(html: str) -> tuple[list[Product], int]:
+    match = PRELOAD_RE.search(html)
+    if not match:
+        raise ValueError("PRELOAD_DATA not found in page HTML")
+    data = extract_json_object(html, match.end())
+    result = (data.get("searchResult") or {}).get("productResults") or {}
+    total = int(result.get("totalCount") or 0)
+    products: list[Product] = []
+    for raw in result.get("products") or []:
+        product = parse_product(raw)
+        if product:
+            products.append(product)
+    return products, total
+
+
+def catalog_params(shop: str, series: str, offset: int, limit: int) -> dict[str, Any]:
+    return {
+        "_f_shops": shop,
+        "_f_series": series,
+        "offset": offset,
+        "limit": limit,
+        "sortType": "NewArrival",
+    }
+
+
+def fetch_via_api(
+    client: httpx.Client,
+    *,
+    shop: str,
+    series: str,
+    area: str,
+    limit: int,
+) -> list[Product]:
     headers = {
-        "Accept": "application/json",
+        "Accept": "application/json, text/plain, */*",
         "X-Requested-With": "XMLHttpRequest",
         "X-G1-Area-Code": area,
         "Accept-Language": "en",
         "User-Agent": USER_AGENT,
-        "Referer": f"https://p-bandai.com/{area.lower()}/",
+        "Referer": f"https://p-bandai.com/{area.lower()}/series/onepiece-series",
     }
 
     products: list[Product] = []
@@ -132,13 +193,7 @@ def fetch_all_products(client: httpx.Client) -> list[Product]:
     max_retries = 3
 
     while total is None or offset < total:
-        params = {
-            "_f_shops": shop,
-            "_f_series": series,
-            "offset": offset,
-            "limit": limit,
-            "sortType": "NewArrival",
-        }
+        params = catalog_params(shop, series, offset, limit)
         last_error: Exception | None = None
         data: dict[str, Any] | None = None
         for attempt in range(max_retries):
@@ -154,9 +209,7 @@ def fetch_all_products(client: httpx.Client) -> list[Product]:
                 if attempt < max_retries - 1:
                     time.sleep(2**attempt)
         if data is None:
-            raise RuntimeError(
-                f"Failed to fetch Bandai catalog at offset={offset}: {last_error}"
-            )
+            raise RuntimeError(f"API fetch failed at offset={offset}: {last_error}")
 
         result = data.get("productResults") or {}
         if total is None:
@@ -173,6 +226,76 @@ def fetch_all_products(client: httpx.Client) -> list[Product]:
             break
 
     return products
+
+
+def fetch_via_html(
+    client: httpx.Client,
+    *,
+    shop: str,
+    series: str,
+    area: str,
+    limit: int,
+) -> list[Product]:
+    headers = {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent": USER_AGENT,
+    }
+    page_url = SERIES_PAGE_URL.format(area=area.lower())
+    products: list[Product] = []
+    offset = 0
+    total: int | None = None
+    max_retries = 3
+
+    while total is None or offset < total:
+        params = catalog_params(shop, series, offset, limit)
+        last_error: Exception | None = None
+        page_products: list[Product] | None = None
+        for attempt in range(max_retries):
+            try:
+                response = client.get(
+                    page_url, params=params, headers=headers, timeout=30.0
+                )
+                response.raise_for_status()
+                page_products, page_total = parse_preload_products(response.text)
+                if total is None:
+                    total = page_total
+                break
+            except (httpx.HTTPError, ValueError, json.JSONDecodeError) as exc:
+                last_error = exc
+                if attempt < max_retries - 1:
+                    time.sleep(2**attempt)
+        if page_products is None:
+            raise RuntimeError(f"HTML fetch failed at offset={offset}: {last_error}")
+        if not page_products:
+            break
+        products.extend(page_products)
+        offset += len(page_products)
+        if len(page_products) < limit:
+            break
+
+    return products
+
+
+def fetch_all_products(client: httpx.Client) -> list[Product]:
+    shop = env("BANDAI_SHOP", "05-0004") or "05-0004"
+    series = env("BANDAI_SERIES", "03-002") or "03-002"
+    area = env("BANDAI_AREA", "US") or "US"
+    limit = int(env("BANDAI_PAGE_LIMIT", "100") or "100")
+
+    try:
+        products = fetch_via_api(
+            client, shop=shop, series=series, area=area, limit=limit
+        )
+        print(f"Fetched {len(products)} products via API")
+        return products
+    except RuntimeError as api_error:
+        print(f"API path failed ({api_error}); falling back to HTML", file=sys.stderr)
+        products = fetch_via_html(
+            client, shop=shop, series=series, area=area, limit=limit
+        )
+        print(f"Fetched {len(products)} products via HTML")
+        return products
 
 
 def load_state(path: Path) -> dict[str, Any] | None:
@@ -209,7 +332,6 @@ def diff_products(
         prior = previous.get(product.product_code)
         if prior is None:
             alerts.append(Alert(kind="new", product=product))
-            # Also notify if a brand-new listing is already buyable
             if product.available:
                 alerts.append(Alert(kind="available", product=product))
             continue
@@ -265,7 +387,6 @@ def post_discord_alerts(webhook_url: str, alerts: list[Alert]) -> None:
                 timeout=30.0,
             )
             response.raise_for_status()
-            # Discord webhook rate limit courtesy
             if i + MAX_EMBEDS_PER_MESSAGE < len(embeds):
                 time.sleep(1)
 
@@ -273,7 +394,12 @@ def post_discord_alerts(webhook_url: str, alerts: list[Alert]) -> None:
 def main() -> int:
     webhook = env("DISCORD_WEBHOOK_URL")
     if not webhook:
-        print("DISCORD_WEBHOOK_URL is required", file=sys.stderr)
+        print(
+            "DISCORD_WEBHOOK_URL is missing or empty. "
+            "Add a repository secret named exactly DISCORD_WEBHOOK_URL "
+            "(Settings → Secrets and variables → Actions).",
+            file=sys.stderr,
+        )
         return 1
 
     state_path = Path(env("STATE_PATH", "state.json") or "state.json")
@@ -285,7 +411,7 @@ def main() -> int:
         return 1
 
     try:
-        with httpx.Client() as client:
+        with httpx.Client(follow_redirects=True) as client:
             products = fetch_all_products(client)
     except RuntimeError as exc:
         print(exc, file=sys.stderr)
