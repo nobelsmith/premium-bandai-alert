@@ -1,0 +1,43 @@
+name: Premium Bandai Monitor
+
+on:
+  schedule:
+    # Every 10 minutes
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Primary key is unique per run (cache entries are immutable).
+      # restore-keys loads the most recent prior snapshot.
+      - name: Restore / save catalog state
+        uses: actions/cache@v4
+        with:
+          path: state.json
+          key: pbandai-state-v1-${{ github.run_id }}
+          restore-keys: |
+            pbandai-state-v1-
+
+      - name: Run monitor
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          STATE_PATH: state.json
+        run: python monitor.py
