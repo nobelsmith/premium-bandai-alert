@@ -25,7 +25,7 @@ sudo apt update && sudo apt install -y git curl rsync
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source "$HOME/.local/bin/env"
 
-git clone git@github.com:nobelsmith/premium-bandai-alert.git
+git clone https://github.com/nobelsmith/premium-bandai-alert.git
 cd premium-bandai-alert
 cp .env.example .env
 nano .env   # set DISCORD_WEBHOOK_URL
