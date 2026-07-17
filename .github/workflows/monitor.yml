@@ -2,8 +2,9 @@ name: Premium Bandai Monitor
 
 on:
   schedule:
-    # Every 5 minutes (GitHub Actions minimum reliable interval)
-    - cron: "*/5 * * * *"
+    # Every 5 minutes, offset from :00/:05/... which are the busiest
+    # GitHub Actions cron slots (schedules are best-effort and often delayed).
+    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
   workflow_dispatch:
 
 permissions:
