@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Premium Bandai monitor every 2 minutes
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=2min
+AccuracySec=10s
+Persistent=true
+Unit=pbandai-monitor.service
+
+[Install]
+WantedBy=timers.target

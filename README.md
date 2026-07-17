@@ -2,14 +2,47 @@
 
 Monitors Premium Bandai USA (One Piece + BANDAI CARD SHOP) for **new products** and **availability changes**, then posts Discord webhook embeds.
 
+**Primary runtime:** Vultr (or any Linux VPS) via a systemd timer every **2 minutes**.  
+GitHub Actions remains available for optional manual runs only (cron disabled — unreliable).
+
 ## How it works
 
-1. Polls `https://p-bandai.com/api/search` with shop `05-0004` and series `03-002` (no End-only filter).
+1. Polls `https://p-bandai.com/api/search` (HTML fallback) with shop `05-0004` and series `03-002`.
 2. Diffs against a persisted `state.json` snapshot.
 3. Alerts on:
    - **New product** — unseen `productCode`
    - **Became available** — `saleStatus == On` and not `OUT_OF_STOCK` / `PRE_ORDER_CLOSED`
 4. First successful run **seeds** the baseline and does not spam historical listings.
+
+## Vultr / VPS setup (recommended)
+
+On the server (Ubuntu/Debian):
+
+```bash
+# as a user with sudo
+sudo apt update && sudo apt install -y git python3 python3-venv rsync
+
+git clone git@github.com:nobelsmith/premium-bandai-alert.git
+cd premium-bandai-alert
+cp .env.example .env
+nano .env   # set DISCORD_WEBHOOK_URL
+
+chmod +x deploy/install-systemd.sh
+sudo bash deploy/install-systemd.sh
+```
+
+That installs to `/opt/premium-bandai-alert`, creates a venv, and enables `pbandai-monitor.timer` (every 2 minutes).
+
+Useful commands:
+
+```bash
+systemctl status pbandai-monitor.timer
+systemctl list-timers pbandai-monitor.timer
+journalctl -u pbandai-monitor.service -n 50 --no-pager
+sudo systemctl start pbandai-monitor.service   # run once now
+```
+
+To change the interval, edit `OnUnitActiveSec` in [`deploy/pbandai-monitor.timer`](deploy/pbandai-monitor.timer), then re-run the install script (or `sudo systemctl daemon-reload && sudo systemctl restart pbandai-monitor.timer`).
 
 ## Local setup
 
@@ -23,31 +56,16 @@ set -a && source .env && set +a
 python monitor.py
 ```
 
-Or without `.env`:
-
-```bash
-export DISCORD_WEBHOOK_URL='https://discord.com/api/webhooks/...'
-python monitor.py
-```
-
 `state.json` is written next to the script (gitignored). Delete it to re-seed.
 
 ## Discord webhook
 
 1. Discord channel → **Edit Channel** → **Integrations** → **Webhooks** → **New Webhook**
-2. Copy the webhook URL
-3. Store it as `DISCORD_WEBHOOK_URL` locally and as a GitHub Actions secret
+2. Copy the webhook URL into `.env` as `DISCORD_WEBHOOK_URL` on the VPS
 
-## GitHub Actions
+## Optional: GitHub Actions manual run
 
-1. Push this repo to GitHub
-2. **Settings → Secrets and variables → Actions → New repository secret**
-   - Name: `DISCORD_WEBHOOK_URL`
-   - Value: your webhook URL
-3. The workflow [`.github/workflows/monitor.yml`](.github/workflows/monitor.yml) is scheduled about every **5 minutes** (plus manual **Run workflow**). GitHub cron is best-effort and can lag or skip under load.
-4. `state.json` is restored/saved via Actions cache (keys prefixed `pbandai-state-v1-`)
-
-First Actions run seeds the catalog silently. Later runs send alerts when something changes.
+Push is not required for Vultr. The workflow only has **Run workflow** (no schedule). If you use it, add repository secret `DISCORD_WEBHOOK_URL`. Do **not** run both GHA and Vultr against the same Discord channel unless you accept duplicate alerts (they keep separate state).
 
 ## Optional env vars
 

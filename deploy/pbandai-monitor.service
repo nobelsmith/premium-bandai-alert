@@ -1,0 +1,14 @@
+[Unit]
+Description=Premium Bandai Discord alert monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/premium-bandai-alert
+EnvironmentFile=/opt/premium-bandai-alert/.env
+ExecStart=/opt/premium-bandai-alert/.venv/bin/python /opt/premium-bandai-alert/monitor.py
+Nice=10
+
+# Do not treat "no changes" as a service failure spam in the journal.
+SuccessExitStatus=0
