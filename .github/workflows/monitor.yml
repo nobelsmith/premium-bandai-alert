@@ -2,8 +2,8 @@ name: Premium Bandai Monitor
 
 on:
   schedule:
-    # Every 10 minutes
-    - cron: "*/10 * * * *"
+    # Every 5 minutes (GitHub Actions minimum reliable interval)
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:

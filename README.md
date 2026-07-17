@@ -44,7 +44,7 @@ python monitor.py
 2. **Settings → Secrets and variables → Actions → New repository secret**
    - Name: `DISCORD_WEBHOOK_URL`
    - Value: your webhook URL
-3. The workflow [`.github/workflows/monitor.yml`](.github/workflows/monitor.yml) runs every **10 minutes** and on manual **Run workflow**
+3. The workflow [`.github/workflows/monitor.yml`](.github/workflows/monitor.yml) runs every **5 minutes** and on manual **Run workflow**
 4. `state.json` is restored/saved via Actions cache (keys prefixed `pbandai-state-v1-`)
 
 First Actions run seeds the catalog silently. Later runs send alerts when something changes.
