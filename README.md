@@ -45,13 +45,13 @@ journalctl -u pbandai-monitor.service -n 50 --no-pager
 sudo systemctl start pbandai-monitor.service   # run once now
 ```
 
-To change the interval, edit `OnUnitActiveSec` in [`deploy/pbandai-monitor.timer`](deploy/pbandai-monitor.timer), then re-run the install script (or `sudo systemctl daemon-reload && sudo systemctl restart pbandai-monitor.timer`).
+To change the interval, edit `OnCalendar` in [`deploy/pbandai-monitor.timer`](deploy/pbandai-monitor.timer), then re-run the install script (or `sudo systemctl daemon-reload && sudo systemctl restart pbandai-monitor.timer`).
 
 ## Local setup
 
 ```bash
 # install uv if needed: https://docs.astral.sh/uv/getting-started/installation/
-uv sync
+uv sync --group dev
 cp .env.example .env
 # Edit .env and set DISCORD_WEBHOOK_URL
 set -a && source .env && set +a
@@ -59,6 +59,23 @@ uv run python monitor.py
 ```
 
 `state.json` is written next to the script (gitignored). Delete it to re-seed.
+
+## Testing
+
+```bash
+uv sync --group dev
+
+# Unit tests only (offline, fixtures)
+uv run pytest -m "not live"
+
+# Full suite including live Bandai API/HTML contract checks
+uv run pytest
+
+# Live contract only — use this when you suspect the site changed
+uv run pytest -m live -s
+```
+
+Live tests hit `p-bandai.com` and fail if response shape, `PRELOAD_DATA`, pagination, or required product fields change. CI runs unit + live tests on push/PR and weekly.
 
 ## Discord webhook
 

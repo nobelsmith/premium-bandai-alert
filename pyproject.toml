@@ -8,5 +8,20 @@ dependencies = [
     "httpx>=0.27.0,<1.0.0",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0,<9.0.0",
+]
+
 [tool.uv]
 package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "live: hits the real Premium Bandai site/API (network required)",
+]
+addopts = "-ra"
+filterwarnings = [
+    "error",
+]

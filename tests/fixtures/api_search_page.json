@@ -1,0 +1,94 @@
+{
+  "aggs": {},
+  "productResults": {
+    "totalCount": 4,
+    "offset": 0,
+    "limit": 100,
+    "sortType": "NewArrival",
+    "products": [
+      {
+        "productCode": "TEST-AVAILABLE-001",
+        "productName": {
+          "en": "Test Available Booster Box"
+        },
+        "saleStatus": "On",
+        "flags": [
+          "PRE_ORDER"
+        ],
+        "fixedListPrice": {
+          "amount": 144.0,
+          "currency": "USD"
+        },
+        "baseListPrice": null,
+        "productImages": [
+          {
+            "fileUrl": "files/seller-products/TEST/img.jpg",
+            "mediaType": "Image",
+            "altText": "test",
+            "width": 800,
+            "height": 800
+          }
+        ]
+      },
+      {
+        "productCode": "TEST-OOS-001",
+        "productName": {
+          "en": "Test Out Of Stock Item"
+        },
+        "saleStatus": "On",
+        "flags": [
+          "OUT_OF_STOCK"
+        ],
+        "fixedListPrice": {
+          "amount": 36.0,
+          "currency": "USD"
+        },
+        "baseListPrice": null,
+        "productImages": []
+      },
+      {
+        "productCode": "TEST-WAITING-001",
+        "productName": {
+          "en": "Test Waiting Lottery Item"
+        },
+        "saleStatus": "Waiting",
+        "flags": [
+          "CHANCE_TO_BUY_DRAWING",
+          "PRE_ORDER"
+        ],
+        "fixedListPrice": {
+          "amount": 120.0,
+          "currency": "USD"
+        },
+        "baseListPrice": null,
+        "productImages": [
+          {
+            "fileUrl": "https://cdn.example.com/abs.jpg",
+            "mediaType": "Image"
+          }
+        ]
+      },
+      {
+        "productCode": "TEST-END-001",
+        "productName": {
+          "ja": "\u7d42\u4e86\u5546\u54c1",
+          "en": "Test Ended Item"
+        },
+        "saleStatus": "End",
+        "flags": [
+          "PRE_ORDER_CLOSED"
+        ],
+        "fixedListPrice": null,
+        "baseListPrice": {
+          "amount": 99.5,
+          "currency": "USD"
+        },
+        "productImages": [
+          {
+            "fileUrl": "/files/relative.jpg"
+          }
+        ]
+      }
+    ]
+  }
+}

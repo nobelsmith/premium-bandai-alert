@@ -7,3 +7,7 @@ venv/
 .Python
 *.egg-info/
 .DS_Store
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml

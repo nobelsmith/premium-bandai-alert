@@ -2,8 +2,10 @@
 Description=Run Premium Bandai monitor every 2 minutes
 
 [Timer]
+# OnCalendar is reliable across reboots. OnUnitActiveSec + oneshot can
+# stall in "elapsed" with no next trigger (seen after 2026-08-17 reboot).
 OnBootSec=30s
-OnUnitActiveSec=2min
+OnCalendar=*:0/2
 AccuracySec=10s
 Persistent=true
 Unit=pbandai-monitor.service
